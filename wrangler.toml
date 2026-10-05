@@ -1,0 +1,9 @@
+name = "flow-api"
+main = "src/worker.js"
+compatibility_date = "2024-01-01"
+
+# D1 数据库绑定
+[[d1_databases]]
+binding = "DB"
+database_name = "flow-db"
+database_id = "df01b5b6-14e3-44a7-a6b2-8718311e36e2"
