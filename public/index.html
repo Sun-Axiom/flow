@@ -118,19 +118,17 @@
 </div></div>
 
 <script>
-    // ⚠️ 请替换为你实际部署好的 Workers URL 地址
-    const API_URL = "https://dawn-boat-3917.sunwallop.workers.dev";
+    const API_URL = "https://flow-api.xxxx.workers.dev"; // 确保替换成你Worker的实际URL
     
     let STATE = { all: [], tpls: [] };
     let CUR_TAB = "默认分类";
     let IS_TPL_EDITING = false;
     
-    // --- 🔑 身份验证模块 ---
     let FLOW_TOKEN = localStorage.getItem('flow_access_token');
 
     const secureFetch = async (url, options = {}) => {
         if (!FLOW_TOKEN) {
-            FLOW_TOKEN = prompt("🛡️ 访问受限，请输入系统暗号：");
+            FLOW_TOKEN = prompt("🛡️️ 访问受限，请输入系统暗号：");
             if (FLOW_TOKEN) localStorage.setItem('flow_access_token', FLOW_TOKEN);
         }
         
@@ -323,10 +321,41 @@
 
     window.toggleTplEdit = () => { IS_TPL_EDITING = !IS_TPL_EDITING; document.getElementById("tplEditBtn").innerText = IS_TPL_EDITING ? "🔒 锁定" : "✍️ 修改模式"; document.getElementById("tplAddBtn").style.display = document.getElementById("tplAddTabBtn").style.display = IS_TPL_EDITING ? "block" : "none"; window.renderTplList(); };
     window.switchTab = (c) => { CUR_TAB = c; window.renderTplList(); };
-    window.saveTplName = async (id, val) => { const t = STATE.tpls.find(x=>x.id===id); if(t && t.name!==val){ t.name=val; await window.postTpl(t); } };
-    window.editStep = async (id, idx, val) => { const t = STATE.tpls.find(x=>x.id===id); if(t && t.steps[idx]!==val){ t.steps[idx]=val; await window.postTpl(t); } };
-    window.addStep = async (id) => { const t = STATE.tpls.find(x=>x.id===id); t.steps.push("新步骤"); await window.postTpl(t); window.renderTplList(); };
-    window.removeStep = async (id, idx) => { const t = STATE.tpls.find(x=>x.id===id); t.steps.splice(idx,1); await window.postTpl(t); window.renderTplList(); };
+    
+    // --- 🔨 修复的模板修改/删除相关方法 ---
+    window.saveTplName = async (id, val) => { 
+        const t = STATE.tpls.find(x=>x.id===id); 
+        if(t && t.name!==val){ 
+            t.name=val; 
+            await window.postTpl(t); 
+        } 
+    };
+    
+    window.editStep = async (id, idx, val) => { 
+        const t = STATE.tpls.find(x=>x.id===id); 
+        if(t && t.steps[idx]!==val){ 
+            t.steps[idx]=val; 
+            await window.postTpl(t); 
+        } 
+    };
+    
+    window.addStep = async (id) => { 
+        const t = STATE.tpls.find(x=>x.id===id); 
+        if (t) {
+            t.steps.push("新步骤"); 
+            await window.postTpl(t); 
+            window.renderTplList(); 
+        }
+    };
+    
+    window.removeStep = async (id, idx) => { 
+        const t = STATE.tpls.find(x=>x.id===id); 
+        if (t) {
+            t.steps.splice(idx,1); 
+            await window.postTpl(t); 
+            window.renderTplList(); 
+        }
+    };
     
     window.renameCategory = async (old, n) => { 
         if(!n.trim() || old === n.trim()) return; 
@@ -337,11 +366,50 @@
         } 
         CUR_TAB = n.trim(); 
         await window.loadData(); 
+        window.renderTplList();
     };
 
-    window.addCategory = async () => { const n = prompt("分类名称:"); if(n) { await window.postTpl({id:'t-'+Date.now(), name:"新流程", cat:n, steps:["第一步"]}); CUR_TAB=n; window.loadData(); } };
-    window.addNewTpl = async () => { const n = prompt("流程名称:"); if(n) { await window.postTpl({id:'t-'+Date.now(), name:n, cat:CUR_TAB, steps:["第一步"]}); window.loadData(); } };
-    window.delTpl = async (id) => { if(confirm("删除流程？")){ await secureFetch(API_URL+"/templates/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); window.loadData(); } };
+    window.addCategory = async () => { 
+        const n = prompt("分类名称:"); 
+        if(n) { 
+            const newTpl = {id: 't-' + Date.now(), name: "新流程", cat: n, steps: ["第一步"]};
+            await window.postTpl(newTpl); 
+            STATE.tpls.push(newTpl);
+            CUR_TAB = n; 
+            window.renderTplList(); 
+        } 
+    };
+
+    window.addNewTpl = async () => { 
+        const n = prompt("流程名称:"); 
+        if(n) { 
+            const newTpl = {id: 't-' + Date.now(), name: n, cat: CUR_TAB, steps: ["第一步"]};
+            await window.postTpl(newTpl); 
+            STATE.tpls.push(newTpl);
+            window.renderTplList(); 
+        } 
+    };
+
+    window.delTpl = async (id) => { 
+        if(confirm("确定删除该流程？")){ 
+            window.updateStatus(true);
+            try {
+                const res = await secureFetch(API_URL + "/templates/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: String(id) })
+                });
+                if (res.ok) {
+                    STATE.tpls = STATE.tpls.filter(x => x.id !== id);
+                    window.renderTplList();
+                }
+            } catch(e) {
+                alert("删除失败");
+            } finally {
+                window.updateStatus(false);
+            }
+        } 
+    };
 
     window.updateTplSelect = () => {
         const g = STATE.tpls.reduce((acc, t) => { (acc[t.cat] = acc[t.cat] || []).push(t); return acc; }, {});
