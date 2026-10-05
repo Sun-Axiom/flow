@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目流管理器 V1.0.50-Secure</title>
+    <style>
+        :root { 
+            --bg-color: #f7f8fa; --nav-bg: rgba(255, 255, 255, 0.9); --card-bg: #ffffff; 
+            --text-main: #262626; --text-sub: #8c8c8c; --border-color: #eef0f2; 
+            --input-bg: #fafafa; --modal-bg: rgba(0, 0, 0, 0.6); 
+            --tab-color: #1890ff; --danger: #ff4d4f; --pinned-color: #ff4d4f;
+            --btn-archive: #3f51b5;
+        }
+        [data-theme="dark"] { 
+            --bg-color: #121212; --nav-bg: rgba(30, 30, 30, 0.9); --card-bg: #1e1e1e; 
+            --text-main: #e0e0e0; --text-sub: #aaaaaa; --border-color: #333333; 
+            --input-bg: #2d2d2d; --modal-bg: rgba(0, 0, 0, 0.85);
+            --btn-archive: #5c6bc0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, "PingFang SC", sans-serif; transition: background 0.2s; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 50px; min-height: 100vh; }
+        
+        .nav-header { height: 60px; background: var(--nav-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); display: flex; justify-content: center; position: sticky; top: 0; z-index: 1000; }
+        .nav-content { width: 100%; max-width: 1200px; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
+        
+        .view-section { display: none; max-width: 1200px; margin: 25px auto; padding: 0 20px; }
+        .view-active { display: block !important; }
+        
+        .btn-black { background: #262626; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; }
+        .f-input { border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); padding: 8px 12px; border-radius: 8px; outline: none; font-size: 12px; }
+
+        .grid-container { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+        .card-pinned { border: 2.5px solid var(--pinned-color) !important; }
+        .prog-bar-bg { background: var(--input-bg); height: 8px; border-radius: 4px; margin: 12px 0; overflow: hidden; border: 1px solid var(--border-color); }
+        .prog-bar-fill { height: 100%; transition: width 0.6s; }
+        .btn-archive-action { flex: 1; background: var(--btn-archive); color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 500; }
+
+        .arch-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+        .arch-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; position: relative; display: flex; flex-direction: column; gap: 4px; }
+        .arch-card .del-x { position: absolute; right: 10px; top: 10px; color: var(--danger); font-size: 18px; cursor: pointer; font-weight: bold; opacity: 0.5; z-index: 10; }
+        .arch-card .del-x:hover { opacity: 1; }
+        .arch-title { font-weight: bold; font-size: 14px; color: var(--tab-color); cursor: pointer; text-decoration: underline dotted; padding-right: 20px; }
+        .arch-info { font-size: 11px; color: var(--text-sub); }
+
+        .modal { position: fixed; inset: 0; background: var(--modal-bg); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(8px); }
+        .modal-box { background: var(--card-bg); padding: 25px; border-radius: 20px; width: 95%; max-width: 850px; max-height: 85vh; overflow-y: auto; }
+        
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #52c41a; }
+        .dot-syncing { background: #fa8c16; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        .tabs-nav { display: flex; gap: 8px; border-bottom: 2px solid var(--border-color); margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
+        .tab-item { padding: 10px 18px; cursor: pointer; border-radius: 10px 10px 0 0; font-size: 13px; background: var(--input-bg); border: 1px solid var(--border-color); border-bottom: none; white-space: nowrap; }
+        .tab-active { background: var(--tab-color) !important; color: #fff !important; }
+        .tpl-item { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; margin-bottom: 15px; border-left: 5px solid var(--tab-color); }
+        .step-box { background: var(--input-bg); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 8px; font-size: 12px; display: flex; gap: 5px; align-items: center; }
+    </style>
+</head>
+<body>
+
+<div class="nav-header">
+    <div class="nav-content">
+        <div onclick="window.switchView('home')" style="cursor:pointer">
+            <span style="font-size:18px; font-weight:800;">项目流管理器</span>
+            <span style="font-size:10px; color:var(--text-sub); margin-left:4px;">V1.0.50</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <span id="syncIndicator" class="status-dot"></span>
+            <button class="btn-black" style="background:none; color:var(--text-main); font-size:18px; padding:5px 10px;" onclick="window.toggleTheme()" title="切换模式">🌗</button>
+            <button class="btn-black" style="background:var(--border-color); color:var(--text-main);" onclick="window.showTplMgr()">⚙️ 流程设置</button>
+            <button class="btn-black" style="background:var(--border-color); color:var(--text-main);" onclick="window.switchView('archive')">📂 归档库</button>
+            <button class="btn-black" onclick="window.showAdd()">+ 新建项目</button>
+            <button class="btn-black" style="background:var(--danger); font-size:10px;" onclick="window.logout()">登出</button>
+        </div>
+    </div>
+</div>
+
+<div id="viewHome" class="view-section view-active">
+    <div id="projectList" class="grid-container"></div>
+</div>
+
+<div id="viewArchive" class="view-section">
+    <div style="background:var(--card-bg); padding:12px 15px; border-radius:15px; margin-bottom:20px; display:flex; gap:10px; align-items:center; border:1px solid var(--border-color);">
+        <select id="archYear" class="f-input" style="width:100px;" onchange="window.renderArchive()"></select>
+        <select id="archTpl" class="f-input" style="width:130px;" onchange="window.renderArchive()"></select>
+        <input type="text" id="archSearch" class="f-input" style="flex:1;" placeholder="搜索项目/单位..." oninput="window.renderArchive()">
+        <button class="btn-black" onclick="window.switchView('home')">🏠 返回</button>
+    </div>
+    <div id="archiveGrid" class="arch-grid"></div>
+</div>
+
+<div id="addModal" class="modal"><div class="modal-box" style="max-width:400px;">
+    <h3>✨ 新建项目</h3><br>
+    <input type="text" id="ipt_n" class="f-input" style="width:100%; margin-bottom:10px;" placeholder="项目名称">
+    <select id="ipt_tpl" class="f-input" style="width:100%; margin-bottom:10px;"></select>
+    <input type="text" id="ipt_un" class="f-input" style="width:100%; margin-bottom:10px;" placeholder="单位名称">
+    <input type="number" id="ipt_am" class="f-input" style="width:100%; margin-bottom:10px;" placeholder="金额">
+    <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn-black" style="flex:1; background:var(--border-color); color:var(--text-main)" onclick="window.closeModal('addModal')">取消</button>
+        <button class="btn-black" style="flex:2;" onclick="window.addP()">确定创建</button>
+    </div>
+</div></div>
+
+<div id="tplModal" class="modal"><div class="modal-box">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h3>⚙️ 流程与模板管理</h3>
+        <div style="display:flex; gap:10px;">
+            <button id="tplEditBtn" class="btn-black" style="background:var(--border-color); color:var(--text-main);" onclick="window.toggleTplEdit()">✍️ 修改模式</button>
+            <button id="tplAddTabBtn" class="btn-black" style="display:none; background:var(--tab-color)" onclick="window.addCategory()">+ 分类</button>
+            <button id="tplAddBtn" class="btn-black" style="display:none; background:#52c41a" onclick="window.addNewTpl()">+ 流程</button>
+        </div>
+    </div>
+    <div id="tabsNav" class="tabs-nav"></div>
+    <div id="tplList"></div>
+    <button class="btn-black" style="width:100%; margin-top:20px; justify-content:center; height:45px;" onclick="window.closeModal('tplModal')">完成并保存</button>
+</div></div>
+
+<script>
+    // ⚠️ 请替换为你实际部署好的 Workers URL 地址
+    const API_URL = "https://flow-api.xxxx.workers.dev";
+    
+    let STATE = { all: [], tpls: [] };
+    let CUR_TAB = "默认分类";
+    let IS_TPL_EDITING = false;
+    
+    // --- 🔑 身份验证模块 ---
+    let FLOW_TOKEN = localStorage.getItem('flow_access_token');
+
+    const secureFetch = async (url, options = {}) => {
+        if (!FLOW_TOKEN) {
+            FLOW_TOKEN = prompt("🛡️ 访问受限，请输入系统暗号：");
+            if (FLOW_TOKEN) localStorage.setItem('flow_access_token', FLOW_TOKEN);
+        }
+        
+        options.headers = {
+            ...options.headers,
+            "X-Auth-Token": FLOW_TOKEN
+        };
+        
+        try {
+            const res = await fetch(url, options);
+            if (res.status === 401) {
+                alert("❌ 暗号错误，请重新输入");
+                localStorage.removeItem('flow_access_token');
+                FLOW_TOKEN = null;
+                location.reload();
+                throw new Error("Unauthorized");
+            }
+            return res;
+        } catch (e) {
+            console.error("Fetch error:", e);
+            throw e;
+        }
+    };
+
+    window.logout = () => {
+        if(confirm("确定退出登录并清除保存的暗号吗？")){
+            localStorage.removeItem('flow_access_token');
+            location.reload();
+        }
+    };
+
+    window.onload = async () => { 
+        if(localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        await window.loadData(); 
+    };
+
+    window.toggleTheme = () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    };
+
+    window.updateStatus = (s) => document.getElementById("syncIndicator").className = s ? "status-dot dot-syncing" : "status-dot";
+
+    window.loadData = async () => {
+        window.updateStatus(true);
+        try {
+            const [pRes, tRes] = await Promise.all([
+                secureFetch(API_URL).then(r => r.json()),
+                secureFetch(API_URL + "/templates").then(r => r.json())
+            ]);
+            STATE.all = pRes.map(p => ({
+                ...p, s: Number(p.s), isPinned: Number(p.isPinned||0), isArchived: Number(p.isArchived||0),
+                logs: typeof p.logs === 'string' ? JSON.parse(p.logs || '[]') : (p.logs || []),
+                archivedAt: p.archivedAt || p.createdAt
+            }));
+            STATE.tpls = tRes.map(t => ({
+                ...t, cat: t.cat || "默认分类", 
+                steps: typeof t.steps === 'string' ? JSON.parse(t.steps || '["默认"]') : (t.steps || ["默认"])
+            }));
+            window.renderHome();
+            window.updateTplSelect();
+            window.initArchFilters();
+        } catch (e) {
+            console.error("Load data failed:", e);
+        } finally { window.updateStatus(false); }
+    };
+
+    window.renderHome = () => {
+        const list = document.getElementById("projectList");
+        const active = STATE.all.filter(p => !p.isArchived).sort((a,b) => b.isPinned - a.isPinned || b.createdAt - a.createdAt);
+        list.innerHTML = active.map(p => {
+            const tpl = STATE.tpls.find(t => t.id === p.tpl) || { name: "未知", steps: ["加载中"] };
+            const pct = Math.min(Math.round(((p.s + 1) / tpl.steps.length) * 100), 100);
+            return `
+            <div class="card ${p.isPinned ? 'card-pinned' : ''}">
+                <div style="position:absolute; top:15px; right:15px; cursor:pointer; opacity:${p.isPinned?1:0.2}" onclick="window.togglePin('${p.id}')">📌</div>
+                <div style="font-weight:800; font-size:16px; margin-bottom:4px;">${p.n}</div>
+                <div style="font-size:11px; color:var(--text-sub); margin-bottom:12px;">🔖 ${tpl.name} | 🏢 ${p.un||'-'} | 💰 ¥${p.am||0}</div>
+                <div class="prog-bar-bg"><div class="prog-bar-fill" style="width:${pct}%; background:hsl(${120-pct*1.2},70%,45%)"></div></div>
+                <select class="f-input" style="width:100%; margin-bottom:10px;" onchange="window.updateStep('${p.id}', this.value)">
+                    ${tpl.steps.map((s, i) => `<option value="${i}" ${p.s==i?'selected':''}>${i+1}.${s}</option>`).join('')}
+                </select>
+                <textarea class="f-input" style="width:100%; height:40px; resize:none; border:none; background:transparent;" onblur="window.saveMemo('${p.id}', this.value)" placeholder="添加备注...">${p.memo||''}</textarea>
+                <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
+                    <div style="width:34px; height:34px; border:1px solid var(--border-color); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-sub);" onclick="window.showLogs('${p.id}')">🕒</div>
+                    <button class="btn-archive-action" onclick="window.archiveProject('${p.id}')">归档该项目</button>
+                </div>
+            </div>`;
+        }).join(active.length?'':'<div style="grid-column:1/-1; text-align:center; padding:100px; color:var(--text-sub)">暂无进行中的项目</div>');
+    };
+
+    window.initArchFilters = () => {
+        const years = [...new Set(STATE.all.map(p => new Date(p.createdAt).getFullYear()))].sort((a,b)=>b-a);
+        const tplIds = [...new Set(STATE.all.map(p => p.tpl))];
+        document.getElementById("archYear").innerHTML = '<option value="">年份</option>' + years.map(y => `<option value="${y}">${y}年</option>`).join('');
+        document.getElementById("archTpl").innerHTML = '<option value="">流程</option>' + tplIds.map(id => {
+            const t = STATE.tpls.find(x => x.id === id);
+            return `<option value="${id}">${t?t.name:'未知'}</option>`;
+        }).join('');
+    };
+
+    window.renderArchive = () => {
+        const q = document.getElementById("archSearch").value.toLowerCase();
+        const y = document.getElementById("archYear").value;
+        const tId = document.getElementById("archTpl").value;
+        const filtered = STATE.all.filter(p => p.isArchived && 
+            (p.n.toLowerCase().includes(q) || (p.un||'').toLowerCase().includes(q)) &&
+            (!y || new Date(p.createdAt).getFullYear().toString() === y) &&
+            (!tId || p.tpl === tId)
+        ).sort((a,b) => b.archivedAt - a.archivedAt);
+
+        document.getElementById("archiveGrid").innerHTML = filtered.map(p => {
+            const t = STATE.tpls.find(x => x.id === p.tpl) || {name:'未知'};
+            return `
+            <div class="arch-card">
+                <div class="del-x" onclick="window.deleteForever('${p.id}')" title="永久删除">×</div>
+                <div class="arch-title" onclick="window.unarchive('${p.id}')">${p.n}</div>
+                <div class="arch-info" style="color:var(--text-main); font-weight:500;">🏢 ${p.un || '未填写单位'}</div>
+                <div class="arch-info">📑 ${t.name} | 💰 ¥${(p.am||0).toLocaleString()}</div>
+                <div class="arch-info" style="opacity:0.7; font-size:10px;">📅 ${new Date(p.createdAt).toLocaleDateString()} ~ ${new Date(p.archivedAt).toLocaleDateString()}</div>
+            </div>`;
+        }).join(filtered.length?'':'<div style="grid-column:1/-1; text-align:center; padding:50px; color:var(--text-sub)">无匹配归档</div>');
+    };
+
+    window.deleteForever = async (id) => {
+        if (confirm("确定要永久删除该项目吗？此操作不可撤销。")) {
+            window.updateStatus(true);
+            try {
+                const res = await secureFetch(API_URL + "/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id })
+                });
+                if (res.ok) {
+                    STATE.all = STATE.all.filter(x => x.id !== id);
+                    window.renderArchive();
+                }
+            } catch (e) { alert("操作失败"); } finally { window.updateStatus(false); }
+        }
+    };
+
+    window.switchView = (v) => {
+        document.querySelectorAll('.view-section').forEach(s => s.classList.remove('view-active'));
+        document.getElementById(v === 'home' ? 'viewHome' : 'viewArchive').classList.add('view-active');
+        if(v === 'archive') window.renderArchive();
+    };
+
+    window.saveToDB = async (p) => {
+        window.updateStatus(true);
+        await secureFetch(API_URL + "/", { 
+            method: "POST", 
+            headers: {"Content-Type":"application/json"}, 
+            body: JSON.stringify({...p, logs: JSON.stringify(p.logs || [])})
+        });
+        window.updateStatus(false);
+    };
+
+    window.archiveProject = async (id) => { if(confirm("确定归档该项目吗？")){ const p = STATE.all.find(x=>x.id===id); p.isArchived = 1; p.archivedAt = Date.now(); await window.saveToDB(p); window.loadData(); } };
+    window.unarchive = async (id) => { if(confirm("将项目恢复到主页？")){ const p = STATE.all.find(x=>x.id===id); p.isArchived = 0; await window.saveToDB(p); window.loadData(); window.switchView('home'); } };
+    
+    window.updateStep = async (id, v) => {
+        const p = STATE.all.find(x => x.id === id); const tpl = STATE.tpls.find(t => t.id === p.tpl); p.s = Number(v);
+        const log = { t: new Date().toLocaleString('zh-CN', {hour12:false}).slice(5, -3), n: tpl.steps[v] };
+        p.logs = [log, ...(p.logs || [])].slice(0, 3); window.renderHome(); await window.saveToDB(p);
+    };
+    window.togglePin = async (id) => { const p = STATE.all.find(x=>x.id===id); p.isPinned = p.isPinned?0:1; window.renderHome(); await window.saveToDB(p); };
+    window.showTplMgr = () => { IS_TPL_EDITING = false; window.renderTplList(); document.getElementById("tplModal").style.display = "flex"; };
+    window.closeModal = (m) => { document.getElementById(m).style.display = "none"; window.loadData(); };
+    window.showAdd = () => document.getElementById("addModal").style.display = "flex";
+    window.saveMemo = (id, v) => { const p = STATE.all.find(x=>x.id===id); if(p && p.memo!==v){ p.memo=v; window.saveToDB(p); } };
+    
+    window.postTpl = async (t) => { 
+        window.updateStatus(true); 
+        await secureFetch(API_URL + "/templates", {
+            method:"POST", 
+            headers:{"Content-Type":"application/json"}, 
+            body:JSON.stringify({...t, steps: JSON.stringify(t.steps)})
+        }); 
+        window.updateStatus(false); 
+    };
+
+    window.renderTplList = () => {
+        const cats = [...new Set(STATE.tpls.map(t => t.cat))];
+        if(!cats.includes(CUR_TAB)) CUR_TAB = cats[0] || "默认分类";
+        document.getElementById("tabsNav").innerHTML = cats.map(c => `<div class="tab-item ${c===CUR_TAB?'tab-active':''}" onclick="window.switchTab('${c}')">${IS_TPL_EDITING ? `<span contenteditable="true" onblur="window.renameCategory('${c}', this.innerText)" onclick="event.stopPropagation()">${c}</span>` : c}</div>`).join('');
+        const filtered = STATE.tpls.filter(t => t.cat === CUR_TAB);
+        document.getElementById("tplList").innerHTML = filtered.map(t => `<div class="tpl-item"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><b>${IS_TPL_EDITING ? `<input class="f-input" value="${t.name}" onblur="window.saveTplName('${t.id}', this.value)">` : t.name}</b>${IS_TPL_EDITING ? `<button style="color:red; border:none; background:none; cursor:pointer;" onclick="window.delTpl('${t.id}')">🗑️ 删除</button>` : ''}</div><div class="steps-wrapper" style="display:flex; flex-wrap:wrap; gap:8px;">${t.steps.map((s, i) => `<div class="step-box">${IS_TPL_EDITING ? `<input value="${s}" onblur="window.editStep('${t.id}', ${i}, this.value)">` : `<span>${s}</span>`}${IS_TPL_EDITING ? `<span style="color:red; cursor:pointer;" onclick="window.removeStep('${t.id}', ${i})">×</span>` : ''}</div>`).join('')}${IS_TPL_EDITING ? `<button class="f-input" onclick="window.addStep('${t.id}')">+ 步骤</button>` : ''}</div></div>`).join('');
+    };
+
+    window.toggleTplEdit = () => { IS_TPL_EDITING = !IS_TPL_EDITING; document.getElementById("tplEditBtn").innerText = IS_TPL_EDITING ? "🔒 锁定" : "✍️ 修改模式"; document.getElementById("tplAddBtn").style.display = document.getElementById("tplAddTabBtn").style.display = IS_TPL_EDITING ? "block" : "none"; window.renderTplList(); };
+    window.switchTab = (c) => { CUR_TAB = c; window.renderTplList(); };
+    window.saveTplName = async (id, val) => { const t = STATE.tpls.find(x=>x.id===id); if(t && t.name!==val){ t.name=val; await window.postTpl(t); } };
+    window.editStep = async (id, idx, val) => { const t = STATE.tpls.find(x=>x.id===id); if(t && t.steps[idx]!==val){ t.steps[idx]=val; await window.postTpl(t); } };
+    window.addStep = async (id) => { const t = STATE.tpls.find(x=>x.id===id); t.steps.push("新步骤"); await window.postTpl(t); window.renderTplList(); };
+    window.removeStep = async (id, idx) => { const t = STATE.tpls.find(x=>x.id===id); t.steps.splice(idx,1); await window.postTpl(t); window.renderTplList(); };
+    
+    window.renameCategory = async (old, n) => { 
+        if(!n.trim() || old === n.trim()) return; 
+        const targets = STATE.tpls.filter(x => x.cat === old);
+        for (let t of targets) { 
+            t.cat = n.trim(); 
+            await window.postTpl(t); 
+        } 
+        CUR_TAB = n.trim(); 
+        await window.loadData(); 
+    };
+
+    window.addCategory = async () => { const n = prompt("分类名称:"); if(n) { await window.postTpl({id:'t-'+Date.now(), name:"新流程", cat:n, steps:["第一步"]}); CUR_TAB=n; window.loadData(); } };
+    window.addNewTpl = async () => { const n = prompt("流程名称:"); if(n) { await window.postTpl({id:'t-'+Date.now(), name:n, cat:CUR_TAB, steps:["第一步"]}); window.loadData(); } };
+    window.delTpl = async (id) => { if(confirm("删除流程？")){ await secureFetch(API_URL+"/templates/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); window.loadData(); } };
+
+    window.updateTplSelect = () => {
+        const g = STATE.tpls.reduce((acc, t) => { (acc[t.cat] = acc[t.cat] || []).push(t); return acc; }, {});
+        document.getElementById("ipt_tpl").innerHTML = Object.keys(g).map(c => `<optgroup label="${c}">${g[c].map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`).join('');
+    };
+
+    window.addP = async () => {
+        const n = document.getElementById("ipt_n").value; const tpl = document.getElementById("ipt_tpl").value; if(!n||!tpl) return;
+        const p = { id: 'p-'+Date.now(), n, tpl, un: document.getElementById("ipt_un").value, am: Number(document.getElementById("ipt_am").value), s: 0, memo: "", isPinned: 0, isArchived: 0, logs: '[]', createdAt: Date.now() };
+        await window.saveToDB(p); window.closeModal("addModal");
+    };
+    
+    window.showLogs = (id) => { const p = STATE.all.find(x=>x.id===id); alert(`变更记录：\n${p.logs.map(l=>l.t+': '+l.n).join('\n') || '暂无'}`); };
+</script>
+</body>
+</html>
